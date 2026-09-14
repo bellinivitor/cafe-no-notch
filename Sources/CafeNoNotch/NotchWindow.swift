@@ -52,6 +52,7 @@ final class NotchController {
     private var globalMonitor: Any?
     private var scrollMonitor: Any?
     private var scrollAccum: CGFloat = 0
+    private var swipedThisGesture = false
     private var cancellables = Set<AnyCancellable>()
 
     init(model: CoffeeModel) {
@@ -73,20 +74,24 @@ final class NotchController {
         }
 
         // Swipe de dois dedos (scroll horizontal) troca de aba quando expandido.
+        // Uma troca por gesto, limiar alto, ignorando a inércia (momentum).
         scrollMonitor = NSEvent.addLocalMonitorForEvents(matching: .scrollWheel) { [weak self] event in
             guard let self, self.model.expanded else { return event }
-            if event.phase == .began { self.scrollAccum = 0 }
-            // só reage a gesto horizontal (não atrapalha o scroll vertical da lista)
-            if abs(event.scrollingDeltaX) > abs(event.scrollingDeltaY) {
+            if event.momentumPhase != [] { return event }   // ignora inércia
+            if event.phase == .began { self.scrollAccum = 0; self.swipedThisGesture = false }
+            // exige gesto claramente horizontal (não pega o scroll vertical da lista)
+            if abs(event.scrollingDeltaX) > abs(event.scrollingDeltaY) * 1.4 {
                 self.scrollAccum += event.scrollingDeltaX
-                if abs(self.scrollAccum) > 42 {
+                if !self.swipedThisGesture && abs(self.scrollAccum) > 90 {
+                    self.swipedThisGesture = true
                     let dir = self.scrollAccum < 0 ? 1 : -1   // arrastar p/ esquerda = próxima aba
                     let target = self.model.page + dir
                     DispatchQueue.main.async { self.model.setPage(target) }
-                    self.scrollAccum = 0
                 }
             }
-            if event.phase == .ended || event.phase == .cancelled { self.scrollAccum = 0 }
+            if event.phase == .ended || event.phase == .cancelled {
+                self.scrollAccum = 0; self.swipedThisGesture = false
+            }
             return event
         }
 

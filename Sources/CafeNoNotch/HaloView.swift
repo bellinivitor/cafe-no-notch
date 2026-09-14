@@ -191,6 +191,7 @@ struct DayPanel: View {
     // largura FIXA de cada aba = padrão único (ilha - padding horizontal).
     private var pageW: CGFloat { islandWidth - 40 }
     private let pagerH: CGFloat = 130   // altura fixa das abas
+    private let coffeeInk = Color(red: 0.86, green: 0.66, blue: 0.46)
 
     var body: some View {
         VStack(spacing: 10) {
@@ -322,38 +323,40 @@ struct DayPanel: View {
         }
     }
 
-    // ── Aba "Sobre": versão + atualização (padrão Overseer) ──────────────
+    // ── Aba "Sobre": versão + atualização, no padrão do app ──────────────
     private var sobrePage: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Text(AppInfo.name)
-                    .font(.system(size: 16, weight: .semibold))
+                    .font(.system(size: 21, weight: .semibold))
                     .foregroundStyle(.white)
-                Text("v\(AppInfo.version)")
-                    .font(.system(size: 12, design: .monospaced))
-                    .foregroundStyle(.white.opacity(0.45))
+                Text(AppInfo.version)
+                    .font(.system(size: 14, weight: .medium, design: .rounded))
+                    .foregroundStyle(coffeeInk)
             }
 
             if let t = model.updateTag {
-                linkButton("nova versão \(t) — baixar", AppInfo.releasesURL,
+                linkButton("saiu a \(t) — baixa aí", AppInfo.releasesURL,
                            color: model.haloColor, weight: .medium)
             } else {
-                Text("tá na versão mais recente")
-                    .font(.system(size: 12.5))
+                Text("tá na última, tranquilo")
+                    .font(.system(size: 13))
                     .foregroundStyle(.white.opacity(0.5))
             }
 
-            linkButton("github.com/bellinivitor/cafe-no-notch", AppInfo.repoURL,
-                       color: Color(red: 0.86, green: 0.66, blue: 0.46), weight: .regular)
-
-            Text("pra atualizar:  git pull && ./build.sh")
-                .font(.system(size: 11, design: .monospaced))
-                .foregroundStyle(.white.opacity(0.5))
-                .padding(.vertical, 5).padding(.horizontal, 9)
-                .background(RoundedRectangle(cornerRadius: 7).fill(Color.white.opacity(0.06)))
-                .textSelection(.enabled)
-
             Spacer(minLength: 0)
+
+            linkButton("ver no GitHub", AppInfo.repoURL, color: coffeeInk, weight: .medium)
+
+            HStack(spacing: 6) {
+                Text("pra atualizar")
+                    .font(.system(size: 12))
+                    .foregroundStyle(.white.opacity(0.4))
+                Text("git pull && ./build.sh")
+                    .font(.system(size: 12, design: .monospaced))
+                    .foregroundStyle(.white.opacity(0.68))
+                    .textSelection(.enabled)
+            }
         }
     }
 
