@@ -1,0 +1,12 @@
+# build
+.build/
+CafeNoNotch.app/
+*.o
+*.swiftmodule
+
+# macOS
+.DS_Store
+
+# Xcode / SwiftPM (caso use)
+.swiftpm/
+DerivedData/
