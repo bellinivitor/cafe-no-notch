@@ -90,8 +90,8 @@ struct IslandView: View {
             hf = model.expanded ? 1 : 0
             startAnimations()
         }
-        .onChange(of: isHot) { _ in startAnimations() }
-        .onChange(of: model.expanded) { exp in animateMorph(exp) }
+        .onChange(of: isHot) { startAnimations() }
+        .onChange(of: model.expanded) { _, exp in animateMorph(exp) }
     }
 
     private func animateMorph(_ exp: Bool) {
