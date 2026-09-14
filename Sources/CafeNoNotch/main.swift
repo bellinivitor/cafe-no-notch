@@ -12,6 +12,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         model.startTicking()
+        model.requestNotificationAuth()
         notch = NotchController(model: model)
 
         // Registra/atualiza o atalho global conforme a configuração.

@@ -57,10 +57,12 @@ struct IslandView: View {
     let geo: NotchGeometry
 
     @State private var breathing = false
+    @State private var twinkle = false
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var active: Bool { model.phase != .sleeping }
+    private var pomoActive: Bool { model.pomodoroActive }
     private var isHot: Bool { model.phase == .hot || model.phase == .warm }
 
     // Morph desacoplado: altura e largura animam separadamente.
@@ -130,31 +132,78 @@ struct IslandView: View {
         .overlay(outline)
     }
 
-    /// Café com leite — usado quando não há café ativo.
-    private var latte: Color { Color(red: 0.80, green: 0.63, blue: 0.45) }
-
     @ViewBuilder
     private var outline: some View {
-        let border = Group {
+        // Base café com leite sempre presente: é o que aparece nas metades
+        // inativas (esquerda = café, direita = foco). Cada lado ativo é
+        // sobreposto na sua cor, drenando do centro pra fora.
+        let border = ZStack {
+            // base preta: some nas metades inativas (vira parte da ilha).
+            IslandShape(corner: corner, topRounded: model.expanded)
+                .stroke(Color.black, style: StrokeStyle(lineWidth: 2.5, lineJoin: .round))
             if active {
-                // borda sutil na cor da fase + sombra/glow verde suave (sem movimento).
-                IslandShape(corner: corner, topRounded: model.expanded)
-                    .stroke(model.haloColor.opacity(0.55),
-                            style: StrokeStyle(lineWidth: 2, lineJoin: .round))
-                    .shadow(color: model.haloColor.opacity(0.55), radius: 7)
-                    .shadow(color: model.haloColor.opacity(0.30), radius: 15)
-                    .animation(.easeInOut(duration: 0.6), value: model.haloColor)
-            } else {
-                // sem café: borda sólida café com leite, sem glow nem movimento.
-                IslandShape(corner: corner, topRounded: model.expanded)
-                    .stroke(latte, style: StrokeStyle(lineWidth: 2.5, lineJoin: .round))
+                strokeRing(model.haloColor)
+                    .mask(halfMask(fromRight: false))
+                    .blur(radius: 0.6)
+            }
+            if pomoActive {
+                strokeRing(model.pomodoroColor)
+                    .mask(halfMask(fromRight: true))
+                    .blur(radius: 0.6)
             }
         }
+        .animation(.easeInOut(duration: 0.6), value: model.haloColor)
+        .animation(.easeInOut(duration: 0.5), value: model.heat)
+        .animation(.easeInOut(duration: 0.5), value: model.pomodoroFraction)
+
         // expandido: sem borda/glow no topo (funde com a câmera).
         if model.expanded {
             border.mask(topFadeMask)
         } else {
             border
+        }
+    }
+
+    /// Anel colorido (borda + glow) usado por café e foco. Um traço mais claro
+    /// por cima pulsa (cintila) para dar vida e ficar mais visível.
+    private func strokeRing(_ color: Color) -> some View {
+        let shape = IslandShape(corner: corner, topRounded: model.expanded)
+        return ZStack {
+            shape
+                .stroke(color.opacity(0.68), style: StrokeStyle(lineWidth: 3, lineJoin: .round))
+                .shadow(color: color.opacity(0.60), radius: 9)
+                .shadow(color: color.opacity(0.32), radius: 18)
+            shape
+                .stroke(color.opacity(twinkle ? 0.95 : 0.30),
+                        style: StrokeStyle(lineWidth: 1.4, lineJoin: .round))
+                .blur(radius: 0.5)
+        }
+    }
+
+    /// Máscara que revela só uma metade do anel, ancorada na borda EXTERNA e com
+    /// comprimento proporcional à fração — assim o anel esvazia do centro pra
+    /// fora. Uma transição suave na frente de drenagem + glow que vaza pra fora.
+    /// Revela a metade inteira do anel (esquerda ou direita), com uma juntinha
+    /// suave no centro e o glow vazando só pra fora — contorno sempre completo.
+    private func halfMask(fromRight: Bool) -> some View {
+        GeometryReader { g in
+            let half = g.size.width / 2
+            let seam: CGFloat = 8   // transição suave na divisa central
+            HStack(spacing: 0) {
+                if fromRight {
+                    Color.clear.frame(width: half - seam)
+                    LinearGradient(colors: [.clear, .black], startPoint: .leading, endPoint: .trailing)
+                        .frame(width: seam)
+                    Color.black.frame(maxWidth: .infinity)
+                } else {
+                    Color.black.frame(maxWidth: .infinity)
+                    LinearGradient(colors: [.black, .clear], startPoint: .leading, endPoint: .trailing)
+                        .frame(width: seam)
+                    Color.clear.frame(width: half - seam)
+                }
+            }
+            .padding(.vertical, -80)
+            .padding(fromRight ? .trailing : .leading, -80)
         }
     }
 
@@ -179,6 +228,12 @@ struct IslandView: View {
             : .easeInOut(duration: 0.4)) {
             breathing = isHot && !reduceMotion
         }
+        // cintilar contínuo do anel (mais visível), a menos que reduza movimento.
+        withAnimation(reduceMotion
+            ? .easeInOut(duration: 0.3)
+            : .easeInOut(duration: 1.3).repeatForever(autoreverses: true)) {
+            twinkle = !reduceMotion
+        }
     }
 }
 
@@ -200,6 +255,7 @@ struct DayPanel: View {
             ZStack(alignment: .topLeading) {
                 HStack(spacing: 0) {
                     agoraPage.frame(width: pageW, height: pagerH, alignment: .topLeading)
+                    focoPage.frame(width: pageW, height: pagerH, alignment: .topLeading)
                     hojePage.frame(width: pageW, height: pagerH, alignment: .topLeading)
                     sobrePage.frame(width: pageW, height: pagerH, alignment: .topLeading)
                 }
@@ -209,24 +265,19 @@ struct DayPanel: View {
             .frame(width: pageW, height: pagerH, alignment: .topLeading)
             .clipped()
 
-            // rodapé fixo: indicador de abas + ações
+            // rodapé fixo: indicador de abas + ações (contextuais por aba).
             HStack(spacing: 12) {
                 dots
                 Spacer()
-                Button(action: { model.brew() }) {
-                    Text("☕ Fiz um café")
-                        .font(.system(size: 13, weight: .semibold))
-                        .padding(.horizontal, 18).padding(.vertical, 8)
-                        .background(
-                            LinearGradient(colors: [Color(red: 0.89, green: 0.65, blue: 0.42),
-                                                    Color(red: 0.78, green: 0.55, blue: 0.35)],
-                                           startPoint: .top, endPoint: .bottom)
-                        )
-                        .foregroundStyle(Color(red: 0.10, green: 0.07, blue: 0.02))
-                        .clipShape(RoundedRectangle(cornerRadius: 9))
+                if model.page == 1 {
+                    focoPrimaryButton
+                    if model.pomodoroState != .idle {
+                        FooterButton(title: "zerar") { model.resetPomodoro() }
+                    }
+                } else {
+                    coffeePrimaryButton
+                    FooterButton(title: "acabou o café") { model.reset() }
                 }
-                .buttonStyle(.plain)
-                FooterButton(title: "acabou o café") { model.reset() }
                 FooterButton(title: "Sair") { NSApp.terminate(nil) }
             }
         }
@@ -236,7 +287,7 @@ struct DayPanel: View {
 
     private var dots: some View {
         HStack(spacing: 6) {
-            ForEach(0..<3, id: \.self) { i in
+            ForEach(0..<4, id: \.self) { i in
                 Circle()
                     .fill(Color.white.opacity(model.page == i ? 0.9 : 0.28))
                     .frame(width: 7, height: 7)
@@ -280,16 +331,116 @@ struct DayPanel: View {
 
             Spacer(minLength: 12)
 
-            GeometryReader { g in
-                ZStack(alignment: .leading) {
-                    Capsule().fill(Color.white.opacity(0.10))
-                    Capsule().fill(model.haloColor)
-                        .frame(width: max(6, g.size.width * model.heat))
-                        .animation(.easeInOut(duration: 0.5), value: model.heat)
-                }
-            }
-            .frame(height: 6)
+            HeatFocusBar(model: model)
         }
+    }
+
+    // ── Aba "Foco": cronômetro de pomodoro ───────────────────────────────
+    private var focoTitle: String {
+        switch model.pomodoroState {
+        case .running: return "Foco"
+        case .paused:  return "Pausado"
+        case .idle:    return "Pomodoro"
+        }
+    }
+
+    @ViewBuilder
+    private var focoPage: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(alignment: .center, spacing: 12) {
+                Text("⏳").font(.system(size: 26))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(focoTitle)
+                        .font(.system(size: 20, weight: .semibold))
+                        .foregroundStyle(.white)
+                    Text(model.pomodoroSubtitle)
+                        .font(.system(size: 12))
+                        .foregroundStyle(.white.opacity(0.55))
+                }
+                Spacer()
+            }
+
+            Spacer(minLength: 6)
+
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(model.pomodoroLabel)
+                    .font(.system(size: 40, weight: .medium, design: .rounded))
+                    .monospacedDigit()
+                    .foregroundStyle(model.pomodoroColor)
+                Spacer()
+                Text("\(Int(model.pomodoroMinutes)) min")
+                    .font(.system(size: 12))
+                    .foregroundStyle(.white.opacity(0.45))
+            }
+
+            Spacer(minLength: 12)
+
+            if model.pomodoroState == .idle {
+                HStack(spacing: 7) {
+                    Text("duração")
+                        .font(.system(size: 11.5))
+                        .foregroundStyle(.white.opacity(0.4))
+                    ForEach([15, 25, 30, 45, 50], id: \.self) { presetChip($0) }
+                    Text("min")
+                        .font(.system(size: 11.5))
+                        .foregroundStyle(.white.opacity(0.4))
+                }
+            } else {
+                HeatFocusBar(model: model)
+            }
+        }
+    }
+
+    // Botão primário do café (mesmo do rodapé antigo).
+    private var coffeePrimaryButton: some View {
+        Button(action: { model.brew() }) {
+            Text("☕ Fiz um café")
+                .font(.system(size: 13, weight: .semibold))
+                .padding(.horizontal, 18).padding(.vertical, 8)
+                .background(
+                    LinearGradient(colors: [Color(red: 0.89, green: 0.65, blue: 0.42),
+                                            Color(red: 0.78, green: 0.55, blue: 0.35)],
+                                   startPoint: .top, endPoint: .bottom)
+                )
+                .foregroundStyle(Color(red: 0.10, green: 0.07, blue: 0.02))
+                .clipShape(RoundedRectangle(cornerRadius: 9))
+        }
+        .buttonStyle(.plain)
+    }
+
+    // Botão primário do foco — mesmo lugar/porte do "Fiz um café".
+    private var focoPrimaryButton: some View {
+        let title: String = {
+            switch model.pomodoroState {
+            case .idle:    return "iniciar"
+            case .running: return "pausar"
+            case .paused:  return "retomar"
+            }
+        }()
+        return Button(action: { model.togglePomodoro() }) {
+            Text(title)
+                .font(.system(size: 13, weight: .semibold))
+                .padding(.horizontal, 18).padding(.vertical, 8)
+                .background(model.pomodoroColor)
+                .foregroundStyle(Color(red: 0.05, green: 0.06, blue: 0.12))
+                .clipShape(RoundedRectangle(cornerRadius: 9))
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func presetChip(_ m: Int) -> some View {
+        let selected = Int(model.pomodoroMinutes) == m
+        let tint = model.pomodoroColor
+        return Button { model.setPomodoroMinutes(Double(m)) } label: {
+            Text("\(m)")
+                .font(.system(size: 12.5, weight: .medium, design: .rounded))
+                .foregroundStyle(selected ? tint : .white.opacity(0.6))
+                .frame(minWidth: 26)
+                .padding(.vertical, 5).padding(.horizontal, 6)
+                .background(Capsule().fill(tint.opacity(selected ? 0.18 : 0.06)))
+                .overlay(Capsule().stroke(tint.opacity(selected ? 0.5 : 0.16), lineWidth: 1))
+        }
+        .buttonStyle(.plain)
     }
 
     // ── Aba "Cafés hoje": lista com espaço ───────────────────────────────
@@ -390,6 +541,52 @@ struct DayPanel: View {
         case .cold:       return "☠️"
         case .sleeping:   return "☕︎"
         }
+    }
+}
+
+/// Barra de progresso compartilhada. Com café E foco ativos, divide-se ao meio:
+/// metade esquerda = calor do café, metade direita = foco restante. Com só um
+/// ativo, ocupa a barra inteira na cor correspondente.
+struct HeatFocusBar: View {
+    @ObservedObject var model: CoffeeModel
+
+    private var coffeeActive: Bool { model.phase != .sleeping }
+    private var pomoActive: Bool { model.pomodoroActive }
+
+    var body: some View {
+        GeometryReader { g in
+            let w = g.size.width
+            let half = w / 2
+            ZStack(alignment: .leading) {
+                Capsule().fill(Color.white.opacity(0.10))
+
+                if coffeeActive && pomoActive {
+                    // café: nasce no centro e cresce pra esquerda (ponta esvazia).
+                    let coffeeLen = half * model.heat
+                    RoundedRectangle(cornerRadius: 3).fill(model.haloColor)
+                        .frame(width: max(3, coffeeLen))
+                        .offset(x: half - coffeeLen)
+                        .animation(.easeInOut(duration: 0.5), value: model.heat)
+                    // foco: nasce no centro e cresce pra direita (ponta esvazia).
+                    RoundedRectangle(cornerRadius: 3).fill(model.pomodoroColor)
+                        .frame(width: max(0, half * model.pomodoroFraction))
+                        .offset(x: half)
+                        .animation(.easeInOut(duration: 0.5), value: model.pomodoroFraction)
+                    // divisa central.
+                    Rectangle().fill(Color.black.opacity(0.45))
+                        .frame(width: 1).offset(x: half - 0.5)
+                } else if pomoActive {
+                    Capsule().fill(model.pomodoroColor)
+                        .frame(width: max(6, w * model.pomodoroFraction))
+                        .animation(.easeInOut(duration: 0.5), value: model.pomodoroFraction)
+                } else {
+                    Capsule().fill(model.haloColor)
+                        .frame(width: max(6, w * model.heat))
+                        .animation(.easeInOut(duration: 0.5), value: model.heat)
+                }
+            }
+        }
+        .frame(height: 6)
     }
 }
 

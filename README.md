@@ -36,7 +36,7 @@ Para testar já com um café aceso (sem esperar o atalho):
 ## Como usar
 
 - Clique no notch para abrir ou fechar o card.
-- O card tem três abas; troque com dois dedos no trackpad ou pelas bolinhas.
+- O card tem quatro abas; troque com dois dedos no trackpad ou pelas bolinhas.
 - Atalho global: nenhum por padrão. Dá para definir um na aba "Sobre" →
   "configurar" (funciona de qualquer app; deixe vazio para não usar).
 
@@ -57,10 +57,20 @@ Para testar já com um café aceso (sem esperar o atalho):
 
 - **Agora** — estado do café: nome da fase, dica, temperatura em destaque, há
   quanto tempo foi feito e a barra de calor restante.
+- **Foco** — cronômetro de pomodoro: tempo restante, iniciar/pausar/zerar e a
+  duração configurável (chips de 15/25/30/45/50 min, salva automaticamente).
+  Ao chegar a zero, dispara uma notificação do macOS e um som.
 - **Cafés hoje** — quantidade e horários dos cafés do dia. Mostra os mais
   recentes; se houver mais, aparece um "+N mais cedo".
 - **Sobre** — versão, status de atualização (checado no GitHub), atalho atual e
   os botões "configurar" e "ver no GitHub".
+
+## Café + Foco no mesmo halo
+
+O halo do notch é compartilhado entre café e foco. Com os dois ativos, o anel se
+divide ao meio: **metade esquerda** na cor do café (fase de calor) e **metade
+direita** na cor do foco (índigo). A mesma divisão aparece na barra de progresso
+dentro do card. Com só um ativo, ele ocupa o halo/barra inteiros.
 
 ## Estados (conforme o café esfria)
 
