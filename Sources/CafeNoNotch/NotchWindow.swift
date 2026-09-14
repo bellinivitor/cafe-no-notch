@@ -37,11 +37,17 @@ func currentLayout() -> NotchLayout {
     return NotchLayout(screen: screen, geo: geo, centerX: screen.frame.midX)
 }
 
+/// Hosting view que aceita o PRIMEIRO clique mesmo com o app inativo — senão o
+/// macOS engole o clique só pra "ativar" e a ilha não abre.
+final class NotchHostingView: NSHostingView<IslandView> {
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+}
+
 /// Dona da janela do notch: cria, reposiciona, expande/recolhe.
 final class NotchController {
     private let model: CoffeeModel
     private var panel: NSPanel!
-    private var hosting: NSHostingView<IslandView>!
+    private var hosting: NotchHostingView!
     private var layout: NotchLayout
     private var globalMonitor: Any?
     private var scrollMonitor: Any?
@@ -107,7 +113,7 @@ final class NotchController {
         panel.collectionBehavior = [.canJoinAllSpaces, .stationary,
                                     .fullScreenAuxiliary, .ignoresCycle]
 
-        let host = NSHostingView(rootView: IslandView(model: model, geo: layout.geo))
+        let host = NotchHostingView(rootView: IslandView(model: model, geo: layout.geo))
         host.sizingOptions = []   // não deixa o SwiftUI redimensionar a janela sozinho
         host.frame = NSRect(origin: .zero, size: frame.size)
         host.autoresizingMask = [.width, .height]
