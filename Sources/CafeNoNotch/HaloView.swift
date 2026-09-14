@@ -226,7 +226,7 @@ struct DayPanel: View {
                         .clipShape(RoundedRectangle(cornerRadius: 9))
                 }
                 .buttonStyle(.plain)
-                FooterButton(title: "Dormir") { model.reset() }
+                FooterButton(title: "acabou o café") { model.reset() }
                 FooterButton(title: "Sair") { NSApp.terminate(nil) }
             }
         }
@@ -336,10 +336,10 @@ struct DayPanel: View {
             }
 
             if let t = model.updateTag {
-                linkButton("saiu a \(t) — baixa aí", AppInfo.releasesURL,
+                linkButton("nova versão \(t) disponível", AppInfo.releasesURL,
                            color: model.haloColor, weight: .medium)
             } else {
-                Text("tá na última, tranquilo")
+                Text("está na última versão")
                     .font(.system(size: 13))
                     .foregroundStyle(.white.opacity(0.5))
             }
