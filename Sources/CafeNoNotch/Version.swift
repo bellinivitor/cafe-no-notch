@@ -4,8 +4,8 @@ import Foundation
 
 enum AppInfo {
     static let name = "Café no Notch"
-    static let version = "0.1.0"
-    static let currentTag = "v0.1.0"
+    static let version = "0.1.1 beta"
+    static let currentTag = "v0.1.1-beta"
 
     static let repoURL = "https://github.com/bellinivitor/cafe-no-notch"
     static let releasesURL = "https://github.com/bellinivitor/cafe-no-notch/releases"
