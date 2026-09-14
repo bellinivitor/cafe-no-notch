@@ -21,6 +21,11 @@ final class CoffeeModel: ObservableObject {
     @Published var page: Int = 0
     /// Tag mais recente no GitHub, se for mais nova que a instalada.
     @Published var updateTag: String?
+
+    /// Atalho global configurável (padrão: nenhum). keyCode/mods em Carbon.
+    @Published var hotKeyCode: UInt32 = UInt32(max(0, UserDefaults.standard.integer(forKey: "hotKeyCode")))
+    @Published var hotKeyMods: UInt32 = UInt32(max(0, UserDefaults.standard.integer(forKey: "hotKeyMods")))
+    @Published var hotKeyChar: String = UserDefaults.standard.string(forKey: "hotKeyChar") ?? ""
     /// Horários dos cafés de hoje (mais recente primeiro).
     @Published private(set) var history: [Date] = []
 
@@ -90,7 +95,7 @@ final class CoffeeModel: ObservableObject {
 
     var subtitle: String {
         switch phase {
-        case .sleeping: return "manda um ⌘⇧C"
+        case .sleeping: return "bora fazer um?"
         case .hot:      return "no ponto, aproveita"
         case .warm:     return "ainda rende uns goles"
         case .cooling:  return "corre pro último gole"
@@ -118,6 +123,19 @@ final class CoffeeModel: ObservableObject {
         if !v { page = 0 }   // volta pra 1ª aba ao recolher
     }
     func setPage(_ p: Int) { let c = max(0, min(2, p)); if page != c { page = c } }
+
+    /// Rótulo do atalho atual ("não definido" quando vazio).
+    var hotKeyLabel: String {
+        hotKeyCode == 0 ? "nenhum" : modifierGlyphs(hotKeyMods) + hotKeyChar
+    }
+
+    func updateHotKey(keyCode: UInt32, mods: UInt32, char: String) {
+        hotKeyCode = keyCode; hotKeyMods = mods; hotKeyChar = char
+        let d = UserDefaults.standard
+        d.set(Int(keyCode), forKey: "hotKeyCode")
+        d.set(Int(mods), forKey: "hotKeyMods")
+        d.set(char, forKey: "hotKeyChar")
+    }
 
     /// Consulta as tags do repo e sinaliza se a mais recente for mais nova que a
     /// versão instalada (mesmo padrão do Overseer).

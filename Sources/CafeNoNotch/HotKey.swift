@@ -40,6 +40,26 @@ final class HotKey {
     }
 }
 
+/// Converte os modificadores do NSEvent para bits do Carbon.
+func carbonModifiers(from flags: NSEvent.ModifierFlags) -> UInt32 {
+    var m: UInt32 = 0
+    if flags.contains(.command) { m |= UInt32(cmdKey) }
+    if flags.contains(.shift)   { m |= UInt32(shiftKey) }
+    if flags.contains(.option)  { m |= UInt32(optionKey) }
+    if flags.contains(.control) { m |= UInt32(controlKey) }
+    return m
+}
+
+/// Glifos dos modificadores, na ordem convencional (⌃⌥⇧⌘).
+func modifierGlyphs(_ mods: UInt32) -> String {
+    var s = ""
+    if mods & UInt32(controlKey) != 0 { s += "⌃" }
+    if mods & UInt32(optionKey)  != 0 { s += "⌥" }
+    if mods & UInt32(shiftKey)   != 0 { s += "⇧" }
+    if mods & UInt32(cmdKey)     != 0 { s += "⌘" }
+    return s
+}
+
 private func fourCharCode(_ s: String) -> OSType {
     var result: OSType = 0
     for ch in s.utf8.prefix(4) { result = (result << 8) + OSType(ch) }

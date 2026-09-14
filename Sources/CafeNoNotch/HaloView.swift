@@ -307,7 +307,7 @@ struct DayPanel: View {
 
             let labels = model.todayLabels()
             if labels.isEmpty {
-                Text("nada ainda — bora um? ⌘⇧C")
+                Text("nada ainda — faz o primeiro")
                     .font(.system(size: 12.5))
                     .foregroundStyle(.white.opacity(0.45))
             } else {
@@ -346,18 +346,29 @@ struct DayPanel: View {
 
             Spacer(minLength: 0)
 
-            linkButton("ver no GitHub", AppInfo.repoURL, color: coffeeInk, weight: .medium)
-
-            HStack(spacing: 6) {
-                Text("pra atualizar")
+            HStack(spacing: 8) {
+                Text("atalho")
                     .font(.system(size: 12))
                     .foregroundStyle(.white.opacity(0.4))
-                Text("git pull && ./build.sh")
-                    .font(.system(size: 12, design: .monospaced))
-                    .foregroundStyle(.white.opacity(0.68))
-                    .textSelection(.enabled)
+                Text(model.hotKeyLabel)
+                    .font(.system(size: 12.5, weight: .medium, design: .rounded))
+                    .foregroundStyle(.white.opacity(0.75))
+                Spacer()
+                actionButton("configurar", color: coffeeInk) {
+                    NotificationCenter.default.post(name: .openCafeSettings, object: nil)
+                }
             }
+
+            linkButton("ver no GitHub", AppInfo.repoURL, color: coffeeInk, weight: .medium)
         }
+    }
+
+    private func actionButton(_ text: String, color: Color,
+                              weight: Font.Weight = .medium, _ action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(text).font(.system(size: 12.5, weight: weight)).foregroundStyle(color)
+        }
+        .buttonStyle(.plain)
     }
 
     private func linkButton(_ text: String, _ urlString: String,

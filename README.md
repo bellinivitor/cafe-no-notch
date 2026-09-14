@@ -36,15 +36,19 @@ Para testar já com um café aceso (sem esperar o atalho):
 ## Como usar
 
 - Clique no notch para abrir ou fechar o card.
-- Atalho global `Cmd + Shift + C`: registra um café novo de qualquer lugar.
-- O card tem duas abas; troque com dois dedos no trackpad ou pelas bolinhas.
+- O card tem três abas; troque com dois dedos no trackpad ou pelas bolinhas.
+- Atalho global: nenhum por padrão. Dá para definir um na aba "Sobre" →
+  "configurar" (funciona de qualquer app; deixe vazio para não usar).
 
 ## O que cada controle faz
 
 - **Fiz um café** — registra um café recém-feito: zera o cronômetro, acende o
   halo (verde) e adiciona o horário à lista do dia.
-- **Bolinhas** (canto inferior esquerdo) — trocam entre as abas "Agora" e
-  "Cafés hoje". Também dá para trocar com swipe de dois dedos.
+- **Bolinhas** (canto inferior esquerdo) — trocam entre as abas. Também dá para
+  trocar com swipe de dois dedos.
+- **configurar** (aba Sobre) — abre as Configurações para definir ou remover o
+  atalho global.
+- **ver no GitHub** (aba Sobre) — abre o repositório no navegador.
 - **Dormir** — descarta o café atual e volta ao estado sem café (borda café com
   leite, sem contagem de tempo).
 - **Sair** — encerra o app.
@@ -55,6 +59,8 @@ Para testar já com um café aceso (sem esperar o atalho):
   quanto tempo foi feito e a barra de calor restante.
 - **Cafés hoje** — quantidade e horários dos cafés do dia. Mostra os mais
   recentes; se houver mais, aparece um "+N mais cedo".
+- **Sobre** — versão, status de atualização (checado no GitHub), atalho atual e
+  os botões "configurar" e "ver no GitHub".
 
 ## Estados (conforme o café esfria)
 
@@ -78,7 +84,10 @@ O tempo total até "frio" é de ~30 min (`CoffeeModel.coolMinutes`).
   notch (`safeAreaInsets` / `auxiliaryTop*Area`), swipe de dois dedos e clique
   fora para recolher.
 - `Sources/CafeNoNotch/HotKey.swift` — atalho global via Carbon (não precisa de
-  permissão de Acessibilidade).
+  permissão de Acessibilidade) e helpers de modificadores.
+- `Sources/CafeNoNotch/Settings.swift` — janela de Configurações e o gravador de
+  atalho.
+- `Sources/CafeNoNotch/Version.swift` — versão do app e checagem de atualização.
 - `build.sh` — compila e monta o `.app`.
 
 ## Notas
