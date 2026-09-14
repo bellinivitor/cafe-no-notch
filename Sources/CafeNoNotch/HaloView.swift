@@ -200,6 +200,7 @@ struct DayPanel: View {
                 HStack(spacing: 0) {
                     agoraPage.frame(width: pageW, height: pagerH, alignment: .topLeading)
                     hojePage.frame(width: pageW, height: pagerH, alignment: .topLeading)
+                    sobrePage.frame(width: pageW, height: pagerH, alignment: .topLeading)
                 }
                 .offset(x: -CGFloat(model.page) * pageW)
                 .animation(.easeInOut(duration: 0.3), value: model.page)
@@ -234,7 +235,7 @@ struct DayPanel: View {
 
     private var dots: some View {
         HStack(spacing: 6) {
-            ForEach(0..<2, id: \.self) { i in
+            ForEach(0..<3, id: \.self) { i in
                 Circle()
                     .fill(Color.white.opacity(model.page == i ? 0.9 : 0.28))
                     .frame(width: 7, height: 7)
@@ -319,6 +320,53 @@ struct DayPanel: View {
             }
             Spacer(minLength: 0)
         }
+    }
+
+    // ── Aba "Sobre": versão + atualização (padrão Overseer) ──────────────
+    private var sobrePage: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(AppInfo.name)
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(.white)
+                Text("v\(AppInfo.version)")
+                    .font(.system(size: 12, design: .monospaced))
+                    .foregroundStyle(.white.opacity(0.45))
+            }
+
+            if let t = model.updateTag {
+                linkButton("nova versão \(t) — baixar", AppInfo.releasesURL,
+                           color: model.haloColor, weight: .medium)
+            } else {
+                Text("tá na versão mais recente")
+                    .font(.system(size: 12.5))
+                    .foregroundStyle(.white.opacity(0.5))
+            }
+
+            linkButton("github.com/bellinivitor/cafe-no-notch", AppInfo.repoURL,
+                       color: Color(red: 0.86, green: 0.66, blue: 0.46), weight: .regular)
+
+            Text("pra atualizar:  git pull && ./build.sh")
+                .font(.system(size: 11, design: .monospaced))
+                .foregroundStyle(.white.opacity(0.5))
+                .padding(.vertical, 5).padding(.horizontal, 9)
+                .background(RoundedRectangle(cornerRadius: 7).fill(Color.white.opacity(0.06)))
+                .textSelection(.enabled)
+
+            Spacer(minLength: 0)
+        }
+    }
+
+    private func linkButton(_ text: String, _ urlString: String,
+                            color: Color, weight: Font.Weight) -> some View {
+        Button {
+            if let u = URL(string: urlString) { NSWorkspace.shared.open(u) }
+        } label: {
+            Text(text)
+                .font(.system(size: 12.5, weight: weight))
+                .foregroundStyle(color)
+        }
+        .buttonStyle(.plain)
     }
 
     private var emoji: String {

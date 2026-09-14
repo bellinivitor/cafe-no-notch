@@ -17,8 +17,10 @@ final class CoffeeModel: ObservableObject {
     @Published private(set) var now: Date = Date()
     /// Painel do dia aberto (ilha expandida)?
     @Published var expanded: Bool = false
-    /// Aba ativa no painel (0 = Agora, 1 = Cafés hoje).
+    /// Aba ativa no painel (0 = Agora, 1 = Cafés hoje, 2 = Sobre).
     @Published var page: Int = 0
+    /// Tag mais recente no GitHub, se for mais nova que a instalada.
+    @Published var updateTag: String?
     /// Horários dos cafés de hoje (mais recente primeiro).
     @Published private(set) var history: [Date] = []
 
@@ -115,7 +117,29 @@ final class CoffeeModel: ObservableObject {
         if expanded != v { expanded = v }
         if !v { page = 0 }   // volta pra 1ª aba ao recolher
     }
-    func setPage(_ p: Int) { let c = max(0, min(1, p)); if page != c { page = c } }
+    func setPage(_ p: Int) { let c = max(0, min(2, p)); if page != c { page = c } }
+
+    /// Consulta as tags do repo e sinaliza se a mais recente for mais nova que a
+    /// versão instalada (mesmo padrão do Overseer).
+    func checkForUpdate() {
+        guard let url = URL(string: AppInfo.tagsAPI) else { return }
+        var req = URLRequest(url: url, timeoutInterval: 8)
+        req.setValue("CafeNoNotch-app", forHTTPHeaderField: "User-Agent")
+        req.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
+        URLSession.shared.dataTask(with: req) { [weak self] data, _, _ in
+            guard let data,
+                  let arr = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] else { return }
+            let names = arr.compactMap { $0["name"] as? String }.filter { !$0.isEmpty }
+            let newest = names.max { isNewerVersion($1, than: $0) }
+            DispatchQueue.main.async {
+                if let newest, isNewerVersion(newest, than: AppInfo.currentTag) {
+                    self?.updateTag = newest
+                } else {
+                    self?.updateTag = nil
+                }
+            }
+        }.resume()
+    }
 
     /// Horários de hoje formatados "HH:mm" (mais recente primeiro).
     func todayLabels() -> [String] {
@@ -126,6 +150,7 @@ final class CoffeeModel: ObservableObject {
     }
 
     func startTicking() {
+        checkForUpdate()
         timer?.invalidate()
         let t = Timer(timeInterval: 1.0, repeats: true) { [weak self] _ in
             self?.now = Date()
