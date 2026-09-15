@@ -36,7 +36,8 @@ Para testar já com um café aceso (sem esperar o atalho):
 ## Como usar
 
 - Clique no notch para abrir ou fechar o card.
-- O card tem quatro abas; troque com dois dedos no trackpad ou pelas bolinhas.
+- O card tem três abas (Café, Foco, Sobre); troque com dois dedos no trackpad ou
+  pelas bolinhas.
 - Atalho global: nenhum por padrão. Dá para definir um na aba "Sobre" →
   "configurar" (funciona de qualquer app; deixe vazio para não usar).
 
@@ -53,15 +54,25 @@ Para testar já com um café aceso (sem esperar o atalho):
   leite, sem contagem de tempo).
 - **Sair** — encerra o app.
 
+## Visual
+
+O card é uma peça de "vidro obsidiana" (gradiente escuro que funde com o notch) e
+usa **mostradores circulares** — que ecoam o formato da câmera e do halo:
+
+- **Café** — um arco de calor de 270° com a temperatura no centro (e uma
+  fumacinha quando está quente) mostra o estado; rolando/abaixo vem o **histórico
+  do dia** numa linha do tempo (manhã → agora), com um ponto por café e o mais
+  recente em branco.
+- **Foco** — um anel de progresso que drena com o tempo restante (`MM:SS`) no
+  centro.
+
 ## Abas do card
 
-- **Agora** — estado do café: nome da fase, dica, temperatura em destaque, há
-  quanto tempo foi feito e a barra de calor restante.
+- **Café** — estado do café (fase, dica, temperatura no mostrador, há quanto
+  tempo foi feito e quanto falta pra esfriar) e, logo abaixo, o histórico do dia.
 - **Foco** — cronômetro de pomodoro: tempo restante, iniciar/pausar/zerar e a
   duração configurável (chips de 15/25/30/45/50 min, salva automaticamente).
   Ao chegar a zero, dispara uma notificação do macOS e um som.
-- **Cafés hoje** — quantidade e horários dos cafés do dia. Mostra os mais
-  recentes; se houver mais, aparece um "+N mais cedo".
 - **Sobre** — versão, status de atualização (checado no GitHub), atalho atual e
   os botões "configurar" e "ver no GitHub".
 
@@ -69,8 +80,8 @@ Para testar já com um café aceso (sem esperar o atalho):
 
 O halo do notch é compartilhado entre café e foco. Com os dois ativos, o anel se
 divide ao meio: **metade esquerda** na cor do café (fase de calor) e **metade
-direita** na cor do foco (índigo). A mesma divisão aparece na barra de progresso
-dentro do card. Com só um ativo, ele ocupa o halo/barra inteiros.
+direita** na cor do foco (azul). Com só um ativo, aparece só a metade dele; a
+outra funde com a ilha.
 
 ## Estados (conforme o café esfria)
 

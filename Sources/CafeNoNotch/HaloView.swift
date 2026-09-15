@@ -13,7 +13,9 @@ struct NotchGeometry {
 
     /// Tamanho da ilha expandida (o fundo preto que "cresce") — mais horizontal.
     var expandedIslandWidth: CGFloat { max(width, 500) }
-    var expandedIslandHeight: CGFloat { 238 }
+    // Deriva do conteúdo real: faixa do notch + conteúdo do café + rodapé.
+    // Assim cabe justo em qualquer notch, sem cortar nem sobrar tarja.
+    var expandedIslandHeight: CGFloat { height + 300 }
     var expandedCorner: CGFloat { 26 }
 
     var collapsedSize: CGSize {
@@ -113,9 +115,19 @@ struct IslandView: View {
         }
     }
 
+    // Recolhido: preto puro (funde com o notch). Expandido: obsidiana no card
+    // inteiro (sem tarja preta no topo — só o recorte físico do notch fica preto).
+    private var islandFill: LinearGradient {
+        model.expanded
+            ? LinearGradient(colors: [Color(red: 0.090, green: 0.090, blue: 0.102),
+                                      Color(red: 0.039, green: 0.039, blue: 0.047)],
+                             startPoint: .top, endPoint: .bottom)
+            : LinearGradient(colors: [.black, .black], startPoint: .top, endPoint: .bottom)
+    }
+
     private var island: some View {
         ZStack(alignment: .top) {
-            IslandShape(corner: corner, topRounded: model.expanded).fill(Color.black)
+            IslandShape(corner: corner, topRounded: model.expanded).fill(islandFill)
 
             // conteúdo sempre montado no tamanho final, recortado pela ilha:
             // conforme o preto cresce, ele "desenrola" de cima (câmera) pra baixo.
@@ -237,105 +249,172 @@ struct IslandView: View {
     }
 }
 
-/// Conteúdo do painel do dia — abas horizontais (dois dedos no trackpad):
-/// "Agora" (estado do café) e "Cafés hoje" (lista). Botão fixo embaixo.
+// MARK: - Paleta do redesign (obsidiana + café + foco)
+
+private enum Palette {
+    static let ink   = Color(red: 0.957, green: 0.945, blue: 0.918) // #F4F1EA
+    static let ink2  = Color(red: 0.659, green: 0.639, blue: 0.604) // #A8A39A
+    static let ink3  = Color(red: 0.431, green: 0.416, blue: 0.380) // #6E6A61
+    static let crema = Color(red: 0.906, green: 0.753, blue: 0.549) // #E7C08C
+    static let panelTop = Color(red: 0.090, green: 0.090, blue: 0.102) // #17171A
+    static let panelBot = Color(red: 0.039, green: 0.039, blue: 0.047) // #0A0A0C
+    static let hair  = Color.white.opacity(0.06)
+    static let track = Color.white.opacity(0.08)
+}
+
+/// Painel expandido. Três abas horizontais (dois dedos no trackpad):
+/// "Café" (estado + histórico do dia, rolável), "Foco" (pomodoro) e "Sobre".
+/// Mostradores circulares amarram o interior ao formato da câmera/halo.
 struct DayPanel: View {
     @ObservedObject var model: CoffeeModel
     let islandWidth: CGFloat
 
-    // largura FIXA de cada aba = padrão único (ilha - padding horizontal).
-    private var pageW: CGFloat { islandWidth - 40 }
-    private let pagerH: CGFloat = 130   // altura fixa das abas
-    private let coffeeInk = Color(red: 0.86, green: 0.66, blue: 0.46)
+    private var pageW: CGFloat { islandWidth - 44 }
 
     var body: some View {
-        VStack(spacing: 10) {
-            // pager MANUAL: HStack de 2 abas de largura fixa, deslocada por índice
-            // e recortada — determinístico, sem vazamento nem descalibragem.
-            ZStack(alignment: .topLeading) {
-                HStack(spacing: 0) {
-                    agoraPage.frame(width: pageW, height: pagerH, alignment: .topLeading)
-                    focoPage.frame(width: pageW, height: pagerH, alignment: .topLeading)
-                    hojePage.frame(width: pageW, height: pagerH, alignment: .topLeading)
-                    sobrePage.frame(width: pageW, height: pagerH, alignment: .topLeading)
-                }
-                .offset(x: -CGFloat(model.page) * pageW)
-                .animation(.easeInOut(duration: 0.3), value: model.page)
-            }
-            .frame(width: pageW, height: pagerH, alignment: .topLeading)
-            .clipped()
-
-            // rodapé fixo: indicador de abas + ações (contextuais por aba).
-            HStack(spacing: 12) {
-                dots
-                Spacer()
-                if model.page == 1 {
-                    focoPrimaryButton
-                    if model.pomodoroState != .idle {
-                        FooterButton(title: "zerar") { model.resetPomodoro() }
-                    }
-                } else {
-                    coffeePrimaryButton
-                    FooterButton(title: "acabou o café") { model.reset() }
-                }
-                FooterButton(title: "Sair") { NSApp.terminate(nil) }
-            }
+        VStack(spacing: 12) {
+            pager
+            footer
         }
-        .padding(.horizontal, 20)
+        .padding(.horizontal, 22)
         .padding(.bottom, 16)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
 
-    private var dots: some View {
-        HStack(spacing: 6) {
-            ForEach(0..<4, id: \.self) { i in
-                Circle()
-                    .fill(Color.white.opacity(model.page == i ? 0.9 : 0.28))
-                    .frame(width: 7, height: 7)
-                    .onTapGesture { model.setPage(i) }
-            }
+    // Pager: mostra exatamente a página ativa (conteúdo sempre em sincronia com
+    // os pontinhos e o rodapé), com um slide leve na troca.
+    private var pager: some View {
+        ZStack(alignment: .topLeading) {
+            currentPage
+                .frame(width: pageW).frame(maxHeight: .infinity, alignment: .topLeading)
+                .id(model.page)
+                .transition(.asymmetric(insertion: .move(edge: .trailing).combined(with: .opacity),
+                                        removal: .move(edge: .leading).combined(with: .opacity)))
+        }
+        .frame(width: pageW).frame(maxHeight: .infinity, alignment: .topLeading)
+        .clipped()
+        .animation(.easeInOut(duration: 0.28), value: model.page)
+    }
+
+    @ViewBuilder
+    private var currentPage: some View {
+        switch model.page {
+        case 0:  cafePage
+        case 1:  focoPage
+        default: sobrePage
         }
     }
 
-    // ── Aba "Agora": estado do café ──────────────────────────────────────
-    private var agoraPage: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            HStack(alignment: .center, spacing: 12) {
-                Text(model.phase == .sleeping ? "☕︎" : emoji)
-                    .font(.system(size: 34))
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(model.phase.label)
-                        .font(.system(size: 22, weight: .semibold))
-                        .foregroundStyle(.white)
-                    Text(model.subtitle)
-                        .font(.system(size: 13))
-                        .foregroundStyle(.white.opacity(0.55))
+    // ── Aba "Café": estado em cima, histórico do dia embaixo (tudo visível) ─
+    private var cafePage: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            stateRow
+            historySection
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .padding(.top, 12)      // afasta o mostrador do topo (canto arredondado)
+    }
+
+    private var stateRow: some View {
+        HStack(alignment: .top, spacing: 20) {
+            heatGauge
+                .padding(.leading, 18)   // afasta o mostrador da borda esquerda
+            VStack(alignment: .leading, spacing: 0) {
+                Text(model.phase.label)
+                    .font(.system(size: 25, weight: .semibold))
+                    .foregroundStyle(Palette.ink)
+                Text(model.subtitle)
+                    .font(.system(size: 13))
+                    .foregroundStyle(Palette.ink2)
+                    .padding(.top, 3)
+                if model.phase != .sleeping {
+                    VStack(spacing: 7) {
+                        metaRow("feito", model.elapsedMinutes < 1
+                                ? "agorinha"
+                                : "há \(Int(model.elapsedMinutes.rounded())) min")
+                        Rectangle().fill(Palette.hair).frame(height: 1)
+                        metaRow("esfria de vez", coolLabel)
+                    }
+                    .padding(.top, 10)
                 }
             }
-
-            Spacer(minLength: 14)
-
-            HStack(alignment: .firstTextBaseline, spacing: 2) {
-                Text("\(model.temperatureC)")
-                    .font(.system(size: 44, weight: .medium, design: .rounded))
-                    .foregroundStyle(model.haloColor)
-                Text("°")
-                    .font(.system(size: 28, weight: .medium, design: .rounded))
-                    .foregroundStyle(model.haloColor.opacity(0.85))
-                Spacer()
-                Text(model.elapsedMinutes < 1
-                     ? "agorinha"
-                     : "faz \(Int(model.elapsedMinutes.rounded())) min")
-                    .font(.system(size: 12))
-                    .foregroundStyle(.white.opacity(0.45))
-            }
-
-            Spacer(minLength: 12)
-
-            HeatFocusBar(model: model)
+            Spacer(minLength: 0)
         }
     }
 
-    // ── Aba "Foco": cronômetro de pomodoro ───────────────────────────────
+    private var coolLabel: String {
+        let left = CoffeeModel.coolMinutes - model.elapsedMinutes
+        if left <= 0 { return "já esfriou" }
+        return "em ~\(Int(left.rounded())) min"
+    }
+
+    private func metaRow(_ k: String, _ v: String) -> some View {
+        HStack {
+            Text(k).font(.system(size: 12.5)).foregroundStyle(Palette.ink3)
+            Spacer()
+            Text(v).font(.system(size: 13.5)).foregroundStyle(Palette.ink)
+        }
+    }
+
+    // Mostrador de calor: arco de 270° na cor da fase + temperatura no centro.
+    private var heatGauge: some View {
+        ZStack {
+            Circle().trim(from: 0, to: 0.75)
+                .stroke(Palette.track, style: StrokeStyle(lineWidth: 9, lineCap: .round))
+                .rotationEffect(.degrees(135))
+            Circle().trim(from: 0, to: 0.75 * model.heat)
+                .stroke(model.haloColor, style: StrokeStyle(lineWidth: 9, lineCap: .round))
+                .rotationEffect(.degrees(135))
+                .animation(.easeInOut(duration: 0.5), value: model.heat)
+
+            if model.phase == .hot || model.phase == .warm {
+                SteamView().offset(y: -27)
+            }
+
+            if model.phase == .sleeping {
+                Text("—").font(.system(size: 30, weight: .semibold, design: .rounded))
+                    .foregroundStyle(Palette.ink3)
+            } else {
+                VStack(spacing: 0) {
+                    Text("\(model.temperatureC)")
+                        .font(.system(size: 34, weight: .semibold, design: .rounded))
+                        .foregroundStyle(model.haloColor)
+                    Text("°C")
+                        .font(.system(size: 13, weight: .semibold, design: .rounded))
+                        .foregroundStyle(Palette.ink2)
+                }
+            }
+        }
+        .frame(width: 100, height: 100)
+    }
+
+    // ── Histórico do dia: contador + linha do tempo ──────────────────────
+    private var historySection: some View {
+        let times = model.todayTimes()
+        return VStack(alignment: .leading, spacing: 0) {
+            Rectangle().fill(Palette.hair).frame(height: 1).padding(.bottom, 12)
+            HStack(alignment: .firstTextBaseline, spacing: 9) {
+                Text("\(times.count)")
+                    .font(.system(size: 26, weight: .semibold, design: .rounded))
+                    .foregroundStyle(Palette.crema)
+                Text(times.isEmpty ? "nenhum café ainda"
+                     : (times.count == 1 ? "café hoje" : "cafés hoje"))
+                    .font(.system(size: 13))
+                    .foregroundStyle(Palette.ink2)
+            }
+            .padding(.bottom, times.isEmpty ? 6 : 12)
+
+            if times.isEmpty {
+                Text("faz o primeiro pra acender o halo")
+                    .font(.system(size: 12.5))
+                    .foregroundStyle(Palette.ink3)
+            } else {
+                TimelineStrip(times: times)
+            }
+        }
+    }
+
+    // ── Aba "Foco": anel de progresso + controles ────────────────────────
     private var focoTitle: String {
         switch model.pomodoroState {
         case .running: return "Foco"
@@ -343,72 +422,201 @@ struct DayPanel: View {
         case .idle:    return "Pomodoro"
         }
     }
+    private var focoCenterSub: String {
+        switch model.pomodoroState {
+        case .running: return "no foco"
+        case .paused:  return "pausado"
+        case .idle:    return "pronto"
+        }
+    }
+    private var endClock: String {
+        let f = DateFormatter(); f.dateFormat = "HH:mm"
+        return f.string(from: Date().addingTimeInterval(model.pomodoroRemaining))
+    }
 
-    @ViewBuilder
     private var focoPage: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            HStack(alignment: .center, spacing: 12) {
-                Text("⏳").font(.system(size: 26))
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(focoTitle)
-                        .font(.system(size: 20, weight: .semibold))
-                        .foregroundStyle(.white)
-                    Text(model.pomodoroSubtitle)
-                        .font(.system(size: 12))
-                        .foregroundStyle(.white.opacity(0.55))
+        HStack(spacing: 22) {
+            focusRing
+                .padding(.leading, 18)   // afasta o anel da borda esquerda
+            VStack(alignment: .leading, spacing: 0) {
+                Text(focoTitle)
+                    .font(.system(size: 24, weight: .semibold))
+                    .foregroundStyle(Palette.ink)
+                Text(model.pomodoroSubtitle)
+                    .font(.system(size: 13))
+                    .foregroundStyle(Palette.ink2)
+                    .padding(.top, 3)
+                if model.pomodoroState == .idle {
+                    presetsRow.padding(.top, 16)
+                } else {
+                    Text("termina \(endClock)")
+                        .font(.system(size: 12.5))
+                        .foregroundStyle(Palette.ink3)
+                        .padding(.top, 16)
                 }
-                Spacer()
             }
+            Spacer(minLength: 0)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+    }
 
-            Spacer(minLength: 6)
-
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
+    private var focusRing: some View {
+        ZStack {
+            Circle().stroke(Palette.track, style: StrokeStyle(lineWidth: 9, lineCap: .round))
+            Circle().trim(from: 0, to: model.pomodoroFraction)
+                .stroke(model.pomodoroColor, style: StrokeStyle(lineWidth: 9, lineCap: .round))
+                .rotationEffect(.degrees(-90))
+                .animation(.easeInOut(duration: 0.5), value: model.pomodoroFraction)
+            VStack(spacing: 2) {
                 Text(model.pomodoroLabel)
-                    .font(.system(size: 40, weight: .medium, design: .rounded))
+                    .font(.system(size: 30, weight: .semibold, design: .rounded))
                     .monospacedDigit()
                     .foregroundStyle(model.pomodoroColor)
-                Spacer()
-                Text("\(Int(model.pomodoroMinutes)) min")
-                    .font(.system(size: 12))
-                    .foregroundStyle(.white.opacity(0.45))
+                Text(focoCenterSub)
+                    .font(.system(size: 10.5))
+                    .foregroundStyle(Palette.ink3)
             }
+        }
+        .frame(width: 118, height: 118)
+    }
 
-            Spacer(minLength: 12)
-
-            if model.pomodoroState == .idle {
-                HStack(spacing: 7) {
-                    Text("duração")
-                        .font(.system(size: 11.5))
-                        .foregroundStyle(.white.opacity(0.4))
-                    ForEach([15, 25, 30, 45, 50], id: \.self) { presetChip($0) }
-                    Text("min")
-                        .font(.system(size: 11.5))
-                        .foregroundStyle(.white.opacity(0.4))
-                }
-            } else {
-                HeatFocusBar(model: model)
-            }
+    private var presetsRow: some View {
+        HStack(spacing: 7) {
+            Text("duração").font(.system(size: 12)).foregroundStyle(Palette.ink3)
+            ForEach([15, 25, 30, 45, 50], id: \.self) { presetChip($0) }
         }
     }
 
-    // Botão primário do café (mesmo do rodapé antigo).
-    private var coffeePrimaryButton: some View {
-        Button(action: { model.brew() }) {
-            Text("☕ Fiz um café")
-                .font(.system(size: 13, weight: .semibold))
-                .padding(.horizontal, 18).padding(.vertical, 8)
-                .background(
-                    LinearGradient(colors: [Color(red: 0.89, green: 0.65, blue: 0.42),
-                                            Color(red: 0.78, green: 0.55, blue: 0.35)],
-                                   startPoint: .top, endPoint: .bottom)
-                )
-                .foregroundStyle(Color(red: 0.10, green: 0.07, blue: 0.02))
-                .clipShape(RoundedRectangle(cornerRadius: 9))
+    private func presetChip(_ m: Int) -> some View {
+        let selected = Int(model.pomodoroMinutes) == m
+        let tint = model.pomodoroColor
+        return Button { model.setPomodoroMinutes(Double(m)) } label: {
+            Text("\(m)")
+                .font(.system(size: 12.5, weight: .medium, design: .rounded))
+                .foregroundStyle(selected ? tint : Palette.ink2)
+                .frame(minWidth: 24)
+                .padding(.vertical, 5).padding(.horizontal, 8)
+                .background(Capsule().fill(tint.opacity(selected ? 0.18 : 0.05)))
+                .overlay(Capsule().stroke(tint.opacity(selected ? 0.5 : 0.14), lineWidth: 1))
         }
         .buttonStyle(.plain)
     }
 
-    // Botão primário do foco — mesmo lugar/porte do "Fiz um café".
+    // ── Aba "Sobre" ──────────────────────────────────────────────────────
+    private var sobrePage: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                Text(AppInfo.name)
+                    .font(.system(size: 23, weight: .semibold))
+                    .foregroundStyle(Palette.ink)
+                Text(AppInfo.version)
+                    .font(.system(size: 14, weight: .medium, design: .rounded))
+                    .foregroundStyle(Palette.crema)
+            }
+
+            if let t = model.updateTag {
+                linkButton("nova versão \(t) disponível", AppInfo.releasesURL,
+                           color: model.pomodoroColor, weight: .medium)
+            } else {
+                Text("Você está na última versão.")
+                    .font(.system(size: 13))
+                    .foregroundStyle(Palette.ink2)
+            }
+
+            HStack {
+                Text("atalho para registrar um café")
+                    .font(.system(size: 13))
+                    .foregroundStyle(Palette.ink2)
+                Spacer()
+                Text(model.hotKeyLabel)
+                    .font(.system(size: 12.5, weight: .medium, design: .rounded))
+                    .foregroundStyle(Palette.ink)
+                    .padding(.horizontal, 8).padding(.vertical, 3)
+                    .background(RoundedRectangle(cornerRadius: 7).fill(Color.white.opacity(0.06)))
+                    .overlay(RoundedRectangle(cornerRadius: 7).stroke(Palette.hair, lineWidth: 1))
+            }
+            .padding(.top, 4)
+
+            HStack(spacing: 18) {
+                actionButton("configurar", color: model.pomodoroColor) {
+                    NotificationCenter.default.post(name: .openCafeSettings, object: nil)
+                }
+                linkButton("ver no GitHub", AppInfo.repoURL, color: model.pomodoroColor, weight: .regular)
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+    }
+
+    private func actionButton(_ text: String, color: Color,
+                              weight: Font.Weight = .regular, _ action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(text).font(.system(size: 13, weight: weight)).foregroundStyle(color)
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func linkButton(_ text: String, _ urlString: String,
+                            color: Color, weight: Font.Weight) -> some View {
+        Button {
+            if let u = URL(string: urlString) { NSWorkspace.shared.open(u) }
+        } label: {
+            Text(text).font(.system(size: 13, weight: weight)).foregroundStyle(color)
+        }
+        .buttonStyle(.plain)
+    }
+
+    // ── Rodapé: pontinhos + ações contextuais por aba ────────────────────
+    private var footer: some View {
+        HStack(spacing: 12) {
+            dots
+            Spacer()
+            footerActions
+        }
+    }
+
+    @ViewBuilder
+    private var footerActions: some View {
+        switch model.page {
+        case 0:
+            coffeePrimaryButton
+            FooterButton(title: "acabou o café") { model.reset() }
+        case 1:
+            focoPrimaryButton
+            if model.pomodoroState != .idle {
+                FooterButton(title: "zerar") { model.resetPomodoro() }
+            }
+        default:
+            FooterButton(title: "Sair") { NSApp.terminate(nil) }
+        }
+    }
+
+    private var dots: some View {
+        HStack(spacing: 6) {
+            ForEach(0..<3, id: \.self) { i in
+                Capsule()
+                    .fill(Color.white.opacity(model.page == i ? 0.92 : 0.24))
+                    .frame(width: model.page == i ? 18 : 7, height: 7)
+                    .animation(.easeInOut(duration: 0.2), value: model.page)
+                    .onTapGesture { model.setPage(i) }
+            }
+        }
+    }
+
+    private var coffeePrimaryButton: some View {
+        Button(action: { model.brew() }) {
+            Text("Fiz um café")
+                .font(.system(size: 13, weight: .semibold))
+                .padding(.horizontal, 18).padding(.vertical, 9)
+                .background(
+                    LinearGradient(colors: [Palette.crema, Color(red: 0.839, green: 0.651, blue: 0.404)],
+                                   startPoint: .top, endPoint: .bottom)
+                )
+                .foregroundStyle(Color(red: 0.141, green: 0.090, blue: 0.012))
+                .clipShape(RoundedRectangle(cornerRadius: 11))
+        }
+        .buttonStyle(.plain)
+    }
+
     private var focoPrimaryButton: some View {
         let title: String = {
             switch model.pomodoroState {
@@ -420,173 +628,94 @@ struct DayPanel: View {
         return Button(action: { model.togglePomodoro() }) {
             Text(title)
                 .font(.system(size: 13, weight: .semibold))
-                .padding(.horizontal, 18).padding(.vertical, 8)
+                .padding(.horizontal, 18).padding(.vertical, 9)
                 .background(model.pomodoroColor)
-                .foregroundStyle(Color(red: 0.05, green: 0.06, blue: 0.12))
-                .clipShape(RoundedRectangle(cornerRadius: 9))
+                .foregroundStyle(Color(red: 0.02, green: 0.06, blue: 0.12))
+                .clipShape(RoundedRectangle(cornerRadius: 11))
         }
         .buttonStyle(.plain)
-    }
-
-    private func presetChip(_ m: Int) -> some View {
-        let selected = Int(model.pomodoroMinutes) == m
-        let tint = model.pomodoroColor
-        return Button { model.setPomodoroMinutes(Double(m)) } label: {
-            Text("\(m)")
-                .font(.system(size: 12.5, weight: .medium, design: .rounded))
-                .foregroundStyle(selected ? tint : .white.opacity(0.6))
-                .frame(minWidth: 26)
-                .padding(.vertical, 5).padding(.horizontal, 6)
-                .background(Capsule().fill(tint.opacity(selected ? 0.18 : 0.06)))
-                .overlay(Capsule().stroke(tint.opacity(selected ? 0.5 : 0.16), lineWidth: 1))
-        }
-        .buttonStyle(.plain)
-    }
-
-    // ── Aba "Cafés hoje": lista com espaço ───────────────────────────────
-    private var hojePage: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .firstTextBaseline) {
-                Text("Cafés hoje")
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(.white.opacity(0.85))
-                Spacer()
-                Text("\(model.todayLabels().count)")
-                    .font(.system(size: 16, weight: .semibold, design: .rounded))
-                    .foregroundStyle(model.haloColor)
-            }
-
-            let labels = model.todayLabels()
-            if labels.isEmpty {
-                Text("nada ainda — faz o primeiro")
-                    .font(.system(size: 12.5))
-                    .foregroundStyle(.white.opacity(0.45))
-            } else {
-                // mostra os que cabem (3 colunas x 2 linhas); o resto vira "+N".
-                FlowChips(labels: Array(labels.prefix(6)), accent: model.haloColor, columns: 3)
-                if labels.count > 6 {
-                    Text("+\(labels.count - 6) mais cedo")
-                        .font(.system(size: 11.5))
-                        .foregroundStyle(.white.opacity(0.4))
-                }
-            }
-            Spacer(minLength: 0)
-        }
-    }
-
-    // ── Aba "Sobre": versão + atualização, no padrão do app ──────────────
-    private var sobrePage: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Text(AppInfo.name)
-                    .font(.system(size: 21, weight: .semibold))
-                    .foregroundStyle(.white)
-                Text(AppInfo.version)
-                    .font(.system(size: 14, weight: .medium, design: .rounded))
-                    .foregroundStyle(coffeeInk)
-            }
-
-            if let t = model.updateTag {
-                linkButton("nova versão \(t) disponível", AppInfo.releasesURL,
-                           color: model.haloColor, weight: .medium)
-            } else {
-                Text("está na última versão")
-                    .font(.system(size: 13))
-                    .foregroundStyle(.white.opacity(0.5))
-            }
-
-            Spacer(minLength: 0)
-
-            HStack(spacing: 8) {
-                Text("atalho")
-                    .font(.system(size: 12))
-                    .foregroundStyle(.white.opacity(0.4))
-                Text(model.hotKeyLabel)
-                    .font(.system(size: 12.5, weight: .medium, design: .rounded))
-                    .foregroundStyle(.white.opacity(0.75))
-                Spacer()
-                actionButton("configurar", color: coffeeInk) {
-                    NotificationCenter.default.post(name: .openCafeSettings, object: nil)
-                }
-            }
-
-            linkButton("ver no GitHub", AppInfo.repoURL, color: coffeeInk, weight: .medium)
-        }
-    }
-
-    private func actionButton(_ text: String, color: Color,
-                              weight: Font.Weight = .medium, _ action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Text(text).font(.system(size: 12.5, weight: weight)).foregroundStyle(color)
-        }
-        .buttonStyle(.plain)
-    }
-
-    private func linkButton(_ text: String, _ urlString: String,
-                            color: Color, weight: Font.Weight) -> some View {
-        Button {
-            if let u = URL(string: urlString) { NSWorkspace.shared.open(u) }
-        } label: {
-            Text(text)
-                .font(.system(size: 12.5, weight: weight))
-                .foregroundStyle(color)
-        }
-        .buttonStyle(.plain)
-    }
-
-    private var emoji: String {
-        switch model.phase {
-        case .hot, .warm: return "☕️"
-        case .cooling:    return "🌡️"
-        case .cold:       return "☠️"
-        case .sleeping:   return "☕︎"
-        }
     }
 }
 
-/// Barra de progresso compartilhada. Com café E foco ativos, divide-se ao meio:
-/// metade esquerda = calor do café, metade direita = foco restante. Com só um
-/// ativo, ocupa a barra inteira na cor correspondente.
-struct HeatFocusBar: View {
-    @ObservedObject var model: CoffeeModel
+/// Fumacinha subindo do café (só quando quente).
+struct SteamView: View {
+    @State private var on = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    private var coffeeActive: Bool { model.phase != .sleeping }
-    private var pomoActive: Bool { model.pomodoroActive }
+    private let heights: [CGFloat] = [16, 22, 16]
+
+    var body: some View {
+        HStack(spacing: 6) {
+            ForEach(0..<3, id: \.self) { i in
+                Capsule()
+                    .fill(LinearGradient(colors: [.clear, Color.white.opacity(0.34)],
+                                         startPoint: .bottom, endPoint: .top))
+                    .frame(width: 3, height: heights[i])
+                    .offset(y: on ? -7 : 6)
+                    .opacity(on ? 0 : 0.55)
+                    .animation(reduceMotion ? .default
+                               : .easeInOut(duration: 2.2).repeatForever(autoreverses: false)
+                                    .delay(Double(i) * 0.5),
+                               value: on)
+            }
+        }
+        .frame(height: 24)
+        .onAppear { if !reduceMotion { on = true } }
+    }
+}
+
+/// Linha do tempo dos cafés de hoje (cronológica). Ponto branco = o mais recente.
+struct TimelineStrip: View {
+    let times: [Date]
 
     var body: some View {
         GeometryReader { g in
             let w = g.size.width
-            let half = w / 2
-            ZStack(alignment: .leading) {
-                Capsule().fill(Color.white.opacity(0.10))
+            let xs = spacedX(width: w)
+            ZStack(alignment: .topLeading) {
+                Text("manhã").font(.system(size: 10.5)).foregroundStyle(Palette.ink3)
+                    .offset(x: 2, y: 0)
+                Text("agora").font(.system(size: 10.5)).foregroundStyle(Palette.ink3)
+                    .frame(width: 44, alignment: .trailing).offset(x: w - 46, y: 0)
 
-                if coffeeActive && pomoActive {
-                    // café: nasce no centro e cresce pra esquerda (ponta esvazia).
-                    let coffeeLen = half * model.heat
-                    RoundedRectangle(cornerRadius: 3).fill(model.haloColor)
-                        .frame(width: max(3, coffeeLen))
-                        .offset(x: half - coffeeLen)
-                        .animation(.easeInOut(duration: 0.5), value: model.heat)
-                    // foco: nasce no centro e cresce pra direita (ponta esvazia).
-                    RoundedRectangle(cornerRadius: 3).fill(model.pomodoroColor)
-                        .frame(width: max(0, half * model.pomodoroFraction))
-                        .offset(x: half)
-                        .animation(.easeInOut(duration: 0.5), value: model.pomodoroFraction)
-                    // divisa central.
-                    Rectangle().fill(Color.black.opacity(0.45))
-                        .frame(width: 1).offset(x: half - 0.5)
-                } else if pomoActive {
-                    Capsule().fill(model.pomodoroColor)
-                        .frame(width: max(6, w * model.pomodoroFraction))
-                        .animation(.easeInOut(duration: 0.5), value: model.pomodoroFraction)
-                } else {
-                    Capsule().fill(model.haloColor)
-                        .frame(width: max(6, w * model.heat))
-                        .animation(.easeInOut(duration: 0.5), value: model.heat)
+                Capsule().fill(Color.white.opacity(0.09))
+                    .frame(width: w, height: 2).offset(x: 0, y: 22)
+
+                ForEach(Array(xs.enumerated()), id: \.offset) { idx, x in
+                    let last = idx == xs.count - 1
+                    let color = last ? Color.white : Palette.crema
+                    ZStack {
+                        Circle().fill(color.opacity(0.18)).frame(width: 20, height: 20)
+                        Circle().fill(color).frame(width: 11, height: 11)
+                    }
+                    .offset(x: x - 10, y: 12)
                 }
             }
         }
-        .frame(height: 6)
+        .frame(height: 34)
+    }
+
+    /// Posições x dos pontos: proporcionais ao horário, mas com um gap mínimo
+    /// entre pontos, pra que cafés próximos no tempo não fiquem um sobre o outro.
+    private func spacedX(width w: CGFloat) -> [CGFloat] {
+        guard !times.isEmpty else { return [] }
+        let cal = Calendar.current
+        let now = Date()
+        // Janela do dia: "manhã" (6h) → "agora". Se houver café antes das 6h,
+        // a janela estica pra incluí-lo. Assim cada ponto cai no horário real.
+        let morning = cal.date(bySettingHour: 6, minute: 0, second: 0, of: now) ?? cal.startOfDay(for: now)
+        let start = min(morning, times.first ?? morning)
+        let span = max(60, now.timeIntervalSince(start))
+        let minGap: CGFloat = 15
+        var xs = times.map { CGFloat($0.timeIntervalSince(start) / span) * (w - 14) + 7 }
+        for i in 1..<xs.count where xs[i] < xs[i - 1] + minGap {
+            xs[i] = xs[i - 1] + minGap
+        }
+        if let lastX = xs.last, lastX > w - 7 {
+            let shift = lastX - (w - 7)
+            for i in xs.indices { xs[i] -= shift }
+        }
+        return xs
     }
 }
 
@@ -596,49 +725,9 @@ struct FooterButton: View {
     var body: some View {
         Button(action: action) {
             Text(title)
-                .font(.system(size: 11))
-                .foregroundStyle(.white.opacity(0.5))
+                .font(.system(size: 12))
+                .foregroundStyle(Color.white.opacity(0.5))
         }
         .buttonStyle(.plain)
-    }
-}
-
-/// Chips de horário em grade não-lazy (renderiza dentro de ScrollView).
-struct FlowChips: View {
-    let labels: [String]
-    let accent: Color
-    var columns: Int = 2
-
-    private let coffee = Color(red: 0.78, green: 0.55, blue: 0.35)
-    private let coffeeInk = Color(red: 0.88, green: 0.70, blue: 0.50)
-
-    var body: some View {
-        let rows = stride(from: 0, to: labels.count, by: columns).map { start in
-            Array(labels[start ..< min(start + columns, labels.count)].enumerated().map { (start + $0.offset, $0.element) })
-        }
-        VStack(alignment: .leading, spacing: 8) {
-            ForEach(Array(rows.enumerated()), id: \.offset) { _, pair in
-                HStack(spacing: 8) {
-                    ForEach(pair, id: \.0) { idx, t in chip(t, first: idx == 0) }
-                    ForEach(0..<(columns - pair.count), id: \.self) { _ in
-                        Color.clear.frame(maxWidth: .infinity)
-                    }
-                }
-            }
-        }
-    }
-
-    private func chip(_ t: String, first: Bool) -> some View {
-        let tint = first ? accent : coffee
-        return HStack(spacing: 5) {
-            Text("☕").font(.system(size: 11))
-            Text(t).font(.system(size: 12, weight: .medium, design: .monospaced))
-        }
-        .lineLimit(1)
-        .foregroundStyle(first ? accent : coffeeInk)
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 6)
-        .background(Capsule().fill(tint.opacity(0.15)))
-        .overlay(Capsule().stroke(tint.opacity(0.42), lineWidth: 1))
     }
 }

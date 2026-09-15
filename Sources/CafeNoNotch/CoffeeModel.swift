@@ -19,7 +19,7 @@ final class CoffeeModel: ObservableObject {
     @Published private(set) var now: Date = Date()
     /// Painel do dia aberto (ilha expandida)?
     @Published var expanded: Bool = false
-    /// Aba ativa no painel (0 = Agora, 1 = Foco, 2 = Cafés hoje, 3 = Sobre).
+    /// Aba ativa no painel (0 = Café [estado + histórico], 1 = Foco, 2 = Sobre).
     @Published var page: Int = 0
     /// Tag mais recente no GitHub, se for mais nova que a instalada.
     @Published var updateTag: String?
@@ -141,7 +141,7 @@ final class CoffeeModel: ObservableObject {
         if expanded != v { expanded = v }
         if !v { page = 0 }   // volta pra 1ª aba ao recolher
     }
-    func setPage(_ p: Int) { let c = max(0, min(3, p)); if page != c { page = c } }
+    func setPage(_ p: Int) { let c = max(0, min(2, p)); if page != c { page = c } }
 
     /// Rótulo do atalho atual ("não definido" quando vazio).
     var hotKeyLabel: String {
@@ -184,6 +184,12 @@ final class CoffeeModel: ObservableObject {
         let fmt = DateFormatter()
         fmt.dateFormat = "HH:mm"
         return history.filter { cal.isDateInToday($0) }.map { fmt.string(from: $0) }
+    }
+
+    /// Momentos dos cafés de hoje, em ordem cronológica (para a linha do tempo).
+    func todayTimes() -> [Date] {
+        let cal = Calendar.current
+        return history.filter { cal.isDateInToday($0) }.sorted()
     }
 
     // MARK: - Pomodoro: computados
